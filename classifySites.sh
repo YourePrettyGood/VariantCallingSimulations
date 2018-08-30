@@ -66,11 +66,11 @@ SCRIPTDIR=`dirname $0`
 source ${SCRIPTDIR}/pipeline_environment.sh
 
 #Check that the necessary scripts/tools exist:
-if [[ $(command -v ${BEDTOOLS}) ]]; then
+if [[ ! -x "$(command -v ${BEDTOOLS})" ]]; then
    echo "BEDtools appears to be missing, could not find at ${BEDTOOLS}."
    exit 9;
 fi
-if [[ $(command -v ${SCRIPTDIR}/compareSNPlogs) ]]; then
+if [[ ! -x "$(command -v ${SCRIPTDIR}/compareSNPlogs)" ]]; then
    echo "compareSNPlogs has not been compiled, please run the Makefile."
    exit 10;
 fi
