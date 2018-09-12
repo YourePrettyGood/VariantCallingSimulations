@@ -65,6 +65,17 @@ fi
 SCRIPTDIR=`dirname $0`
 source ${SCRIPTDIR}/pipeline_environment.sh
 
+#Check that the necessary scripts/tools exist:
+if [[ ! -x "$(command -v ${BEDTOOLS})" ]]; then
+   echo "BEDtools appears to be missing, could not find at ${BEDTOOLS}."
+   exit 9;
+fi
+if [[ ! -x "$(command -v ${SCRIPTDIR}/compareSNPlogs)" ]]; then
+   echo "compareSNPlogs has not been compiled, please run the Makefile."
+   exit 10;
+fi
+
+
 MASKINGBED="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}_sitesToMask.bed"
 if [[ ! -e "${MASKINGBED}" ]]; then
    echo "Unable to detect masking BED file from PSEUDOFASTA task: ${MASKINGBED}"
