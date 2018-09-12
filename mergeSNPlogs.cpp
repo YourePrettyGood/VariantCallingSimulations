@@ -2,6 +2,7 @@
  * mergeSNPlogs.cpp                                                               *
  * Written by Patrick Reilly                                                      *
  * Version 1.0 written 2017/01/16                                                 *
+ * Version 1.1 written 2018/09/07 Variety of bug fixes                            *
  * Description:                                                                   *
  *                                                                                *
  * Syntax: mergeSNPlogs [branch 1 indel log] [branch 1 SNP log] [branch 2 SNP log]*
@@ -23,7 +24,7 @@
 #define optional_argument 2
 
 //Version:
-#define VERSION "1.0"
+#define VERSION "1.1"
 
 //Usage/help:
 #define USAGE "mergeSNPlogs\nUsage:\n mergeSNPlogs -i [branch 1 indel log] -b [branch 1 SNP log] -c [branch 2 SNP log]\n"
@@ -48,6 +49,7 @@ bool constructIndelMap(ifstream &indel_log, map<string, vector<pair<long, long>>
       vector<string> line_vector;
       line_vector = splitString(logline, '\t');
       if (indel_map.count(line_vector[0]) == 0) {
+         cumulativechange = 0; //Make sure to reset the change on a new scaffold
          indel_map[line_vector[0]].push_back(make_pair(0, 0)); //Every mapping starts with 0,0
       }
       long indel_size = stol(line_vector[3]);
@@ -56,7 +58,7 @@ bool constructIndelMap(ifstream &indel_log, map<string, vector<pair<long, long>>
       }
       long indel_change = line_vector[2] == "ins" ? indel_size : -indel_size;
       cumulativechange += indel_change;
-      long ref_position = stol(line_vector[1]);
+      long ref_position = stol(line_vector[1]) + 1;
       long new_position = ref_position + cumulativechange;
       indel_map[line_vector[0]].push_back(make_pair(ref_position, new_position));
    }
@@ -67,21 +69,35 @@ bool constructIndelMap(ifstream &indel_log, map<string, vector<pair<long, long>>
 long baseToLong(string &base) {
    switch(base[0]) {
       case 'A':
-         return 0;
-      case 'C':
-         return 1;
-      case 'G':
-         return 2;
-      case 'T':
-         return 3;
       case 'a':
          return 0;
+      case 'C':
       case 'c':
          return 1;
+      case 'G':
       case 'g':
          return 2;
+      case 'T':
       case 't':
          return 3;
+      case 'M':
+      case 'm':
+         return 5;
+      case 'R':
+      case 'r':
+         return 6;
+      case 'W':
+      case 'w':
+         return 7;
+      case 'S':
+      case 's':
+         return 8;
+      case 'Y':
+      case 'y':
+         return 9;
+      case 'K':
+      case 'k':
+         return 10;
       default:
          return 4;
    }
@@ -89,7 +105,7 @@ long baseToLong(string &base) {
 
 int main(int argc, char **argv) {
    //Numbers to bases map:
-   char int2bases[] = {'A', 'C', 'G', 'T', 'N'};
+   char int2bases[] = {'A', 'C', 'G', 'T', 'N', 'M', 'R', 'W', 'S', 'Y', 'K'};
    
    //Map for coordinate space change due to indels:
    map<string, vector<pair<long, long>>> indelmap;
@@ -173,6 +189,13 @@ int main(int argc, char **argv) {
       return 4;
    }
    indellog.close();
+   if (debug) {
+      for (auto imprint_iterator = indelmap.begin(); imprint_iterator != indelmap.end(); ++imprint_iterator) {
+         for (auto indel_iterator = imprint_iterator->second.begin(); indel_iterator != imprint_iterator->second.end(); ++indel_iterator) {
+            cerr << imprint_iterator->first << '\t' << indel_iterator->first << '\t' << indel_iterator->second << endl;
+         }
+      }
+   }
    
    //Open the SNP logs:
    ifstream branch1_snp_log, branch2_snp_log;
@@ -219,35 +242,60 @@ int main(int argc, char **argv) {
    cerr << "Reading branch 2 SNP log " << branch2snplog_path << endl;
    string b2line;
    auto indelmap_iterator = indelmap[firstScaffold].begin();
+   auto left_iterator = indelmap[firstScaffold].begin();
    auto b1log_iterator = branch1_log[firstScaffold].begin();
    while (getline(branch2_snp_log, b2line)) {
       vector<string> line_vector;
       line_vector = splitString(b2line, '\t');
       if (line_vector[0] != firstScaffold) {
          indelmap_iterator = indelmap[line_vector[0]].begin();
+         left_iterator = indelmap[line_vector[0]].begin();
          b1log_iterator = branch1_log[line_vector[0]].begin();
          firstScaffold = line_vector[0];
       }
       long oldallele = baseToLong(line_vector[2]);
       long newallele = baseToLong(line_vector[3]);
       if (debug && (oldallele > 3 || newallele > 3)) {
-         cerr << "Found non-ACGT base in branch 1 SNP log at " << line_vector[0] << " position " << line_vector[1] << endl;
+         cerr << "Found non-ACGT base in branch 2 SNP log at " << line_vector[0] << " position " << line_vector[1] << endl;
       }
       //Adjust the position back into the branch 1 source coordinate space:
-      long nonref_position = stol(line_vector[1]);
-      long adjusted_position = nonref_position;
-      if (nonref_position < indelmap_iterator->second && indelmap_iterator->second > 0) { // We went too far in the indel map
-         --indelmap_iterator;
-      } else {
-         while (nonref_position <= indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].end()) {
-            ++indelmap_iterator;
-         }
-         //Make sure to check the left boundary condition, drop back to last interval with start <= nonref_position:
-         if (nonref_position > indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].begin()) {
-            --indelmap_iterator;
-         }
+      long newref_position = stol(line_vector[1]);
+      while (newref_position > indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].end()) {
+         left_iterator = indelmap_iterator;
+         ++indelmap_iterator;
       }
-      adjusted_position += indelmap_iterator->first - indelmap_iterator->second;
+      auto right_iterator = indelmap_iterator;
+      if (right_iterator == indelmap[line_vector[0]].end()) {
+         --right_iterator;
+      }
+      if (indelmap_iterator == indelmap[line_vector[0]].end() || (newref_position < indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].begin())) {
+         --indelmap_iterator;
+      }
+      long left_ins_flank = left_iterator->second + right_iterator->first - left_iterator->first;
+      long right_ins_flank = right_iterator->second;
+      if (debug) {
+         cerr << newref_position << '\t' << indelmap_iterator->first - indelmap_iterator->second << '\t' << left_iterator->first << '\t' << right_iterator->first << '\t' << left_iterator->second << '\t' << right_iterator->second << '\t' << left_ins_flank << '\t' << right_ins_flank << endl;
+      }
+      if (newref_position > left_ins_flank && newref_position < right_ins_flank) {
+         //Mutation along branch 2 is within insertion on branch 1
+         if (debug) {
+            cerr << "Mutation along branch 2 is within insertion on branch 1 at unadjusted position " << line_vector[0] << ":" << newref_position << endl;
+         }
+         continue;
+      }
+      long adjusted_position = newref_position + indelmap_iterator->first - indelmap_iterator->second;
+      //if (adjusted_position < indelmap_iterator->second && indelmap_iterator->second > 0) { // We went too far in the indel map
+      //   --indelmap_iterator;
+      //} else {
+      //   while (adjusted_position <= indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].end()) {
+      //      ++indelmap_iterator;
+      //   }
+      //   //Make sure to check the left boundary condition, drop back to last interval with start <= adjusted_position:
+      //   if (adjusted_position > indelmap_iterator->second && indelmap_iterator != indelmap[line_vector[0]].begin()) {
+      //      --indelmap_iterator;
+      //   }
+      //}
+      //adjusted_position += indelmap_iterator->first - indelmap_iterator->second;
       //If this scaffold isn't present in the branch 1 SNP log, output the adjusted record:
       if (branch1_log.count(line_vector[0]) == 0) {
          cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[oldallele] << '\t' << int2bases[newallele] << endl;
@@ -257,7 +305,7 @@ int main(int argc, char **argv) {
             ++b1log_iterator;
          }
          if (b1log_iterator == branch1_log[line_vector[0]].end()) { //No more branch 1 records, so short-circuit outputting branch 2 records
-            cout << b2line << endl;
+            cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[oldallele] << '\t' << int2bases[newallele] << endl;
          } else if ((*b1log_iterator)[0] == adjusted_position) { //Transitively reduce this record
             if (debug && (*b1log_iterator)[2] != oldallele) { //Transitive mismatch, output an error if debug mode is on
                cerr << "Allele mismatch during transitive reduction at " << line_vector[0] << " position " << adjusted_position << endl;
@@ -266,7 +314,7 @@ int main(int argc, char **argv) {
             }
             cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[(*b1log_iterator)[1]] << '\t' << int2bases[newallele] << endl;
          } else { //Only branch 2 record at this position, so output it
-            cout << b2line << endl;
+            cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[oldallele] << '\t' << int2bases[newallele] << endl;
          }
       }
    }

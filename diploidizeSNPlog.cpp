@@ -43,19 +43,15 @@ vector<string> splitString(string line_to_split, char delimiter) {
 long baseToLong(string &base) {
    switch(base[0]) {
       case 'A':
-         return 0;
-      case 'C':
-         return 1;
-      case 'G':
-         return 2;
-      case 'T':
-         return 3;
       case 'a':
          return 0;
+      case 'C':
       case 'c':
          return 1;
+      case 'G':
       case 'g':
          return 2;
+      case 'T':
       case 't':
          return 3;
       default:
