@@ -7,6 +7,9 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 
+my $SCRIPTNAME = "closestIndelDistance.pl";
+my $VERSION = "1.0";
+
 =pod
 
 =head1 NAME
@@ -23,6 +26,7 @@ closestIndelDistance.pl [options]
                        (default: -, which is STDIN)
   --insnp,-i           Input INSNP (TSV) of SNPs
   --debug,-d           Output extra information to STDERR
+  --version            Output version string
 
 =head1 DESCRIPTION
 
@@ -41,10 +45,14 @@ my $insnp_path = "";
 my $help = 0;
 my $man = 0;
 my $debug = 0;
+my $dispversion = 0;
 
-GetOptions('vcf|v=s' => \$vcf_path, 'insnp|i=s' => \$insnp_path, 'debug|d' => \$debug, 'help|h|?' => \$help, man => \$man) or pod2usage(2);
-pod2usage(-exitval => 1, -output => \*STDERR) if $help;
+GetOptions('vcf|v=s' => \$vcf_path, 'insnp|i=s' => \$insnp_path, 'debug|d+' => \$debug, 'version' => \$dispversion, 'help|h|?+' => \$help, man => \$man) or pod2usage(2);
+pod2usage(-exitval => 1, -verbose => $help, -output => \*STDERR) if $help;
 pod2usage(-exitval => 0, -output => \*STDERR, -verbose => 2) if $man;
+
+print STDERR "${SCRIPTNAME} version ${VERSION}\n" if $dispversion;
+exit 0 if $dispversion;
 
 #Hash of arrays of positions of indels (hash keys are scaffolds):
 my %indel_positions = ();

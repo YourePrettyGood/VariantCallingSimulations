@@ -13,6 +13,9 @@ Getopt::Long::Configure qw(gnu_getopt);
 #First pass script to extract ground truth INSNP from pairwise MAF
 # of 1:1 alignments produced by LAST
 
+my $SCRIPTNAME = "groundTruthFromMAF.pl";
+my $VERSION = "1.0";
+
 =pod
 
 =head1 NAME
@@ -27,6 +30,7 @@ groundTruthFromMAF.pl [options] <Species 1 prefix> <Species 2 prefix>
   --help,-h,-?          Print this help documentation
   --input_MAF,-i        Path to input MAF 1:1 alignment file (default: STDIN)
   --debug,-d            Output debugging information to STDERR
+  --version,-v          Output version string
 
 =head1 DESCRIPTION
 
@@ -95,9 +99,13 @@ my $help = 0;
 my $man = 0;
 my $maf_path = "STDIN";
 my $debug = 0;
-GetOptions('input_maf|i=s' => \$maf_path, 'debug|d' => \$debug, 'help|h|?+' => \$help, man => \$man) or pod2usage(2);
+my $dispversion = 0;
+GetOptions('input_maf|i=s' => \$maf_path, 'debug|d+' => \$debug, 'version|v' => \$dispversion, 'help|h|?+' => \$help, man => \$man) or pod2usage(2);
 pod2usage(-exitval => 1, -verbose => $help, -output => \*STDERR) if $help;
 pod2usage(-exitval => 0, -verbose => 2, -output => \*STDERR) if $man;
+
+print STDERR "${SCRIPTNAME} version ${VERSION}\n" if $dispversion;
+exit 0 if $dispversion;
 
 #Open the MAF file, or set it up to be read from STDIN:
 print STDERR "Opening MAF file\n" if $debug;
