@@ -155,7 +155,7 @@ for class in "ER" "FN" "FP" "TN" "TP"
 done
 
 FPR="NA"
-if [[ "${siteclasses['FP']}" -ne "0" || "${siteclasses['ER'}}" -ne "0" || "${siteclasses['TN']}" -ne "0" ]]; then
+if [[ "${siteclasses['FP']}" -ne "0" || "${siteclasses['ER']}" -ne "0" || "${siteclasses['TN']}" -ne "0" ]]; then
    FPR=`echo "100*(${siteclasses['FP']}+${siteclasses['ER']})/(${siteclasses['FP']}+${siteclasses['ER']}+${siteclasses['TN']})" | bc -l`
 fi
 FDR="NA"
@@ -183,8 +183,13 @@ if [[ -n "${MASKINGBED}" ]]; then
          maskedsiteclasses[${class}]=`${BEDTOOLS} subtract -a ${OUTPREFIX}_${class}s.bed -b ${MASKINGBED} | ${BEDTOOLS} intersect -a - -b <(awk 'BEGIN{FS="\t";OFS="\t";}{print $1, 0, $2;}' ${REF}.fai | sort -k1,1 -k2,2n -k3,3n) | awk 'BEGIN{FS="\t";sum=0;}{sum+=$3-$2;}END{print sum;}'`
       fi
    done
-   maskedsites=`awk 'BEGIN{FS="\t";sum=0;}{sum+=$3-$2;}END{print sum;}' ${MASKINGBED}`
-   totalsites=`awk 'BEGIN{FS="\t";sum=0;}{sum+=$2;}END{print sum;}' ${REF}.fai`
+   if [[ "${CALLABLEEXT}" == "bed" ]]; then
+      maskedsites=`bedtools intersect -a ${MASKINGBED} -b <(sort -k1,1 -k2,2n -k3,3n < ${CALLABLEBED}) | awk 'BEGIN{FS="\t";sum=0;}{sum+=$3-$2;}END{print sum;}'`
+      totalsites=`awk 'BEGIN{FS="\t";sum=0;}{sum+=$3-$2;}END{print sum;}' ${CALLABLEBED}`
+   else
+      maskedsites=`awk 'BEGIN{FS="\t";sum=0;}{sum+=$3-$2;}END{print sum;}' ${MASKINGBED}`
+      totalsites=`awk 'BEGIN{FS="\t";sum=0;}{sum+=$2;}END{print sum;}' ${REF}.fai`
+   fi
    
    FPRm="NA"
    if [[ "${maskedsiteclasses['FP']}" -ne "0" || "${maskedsiteclasses['ER']}" -ne "0" || "${maskedsiteclasses['TN']}" -ne "0" ]]; then
