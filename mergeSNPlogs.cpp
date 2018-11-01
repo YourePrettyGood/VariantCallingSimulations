@@ -3,6 +3,7 @@
  * Written by Patrick Reilly                                                      *
  * Version 1.0 written 2017/01/16                                                 *
  * Version 1.1 written 2018/09/07 Variety of bug fixes                            *
+ * Version 1.2 written 2018/10/18 Empty indelmap for scaffold bug fix             *
  * Description:                                                                   *
  *                                                                                *
  * Syntax: mergeSNPlogs [branch 1 indel log] [branch 1 SNP log] [branch 2 SNP log]*
@@ -24,7 +25,7 @@
 #define optional_argument 2
 
 //Version:
-#define VERSION "1.1"
+#define VERSION "1.2"
 
 //Usage/help:
 #define USAGE "mergeSNPlogs\nUsage:\n mergeSNPlogs -i [branch 1 indel log] -b [branch 1 SNP log] -c [branch 2 SNP log]\n"
@@ -237,6 +238,11 @@ int main(int argc, char **argv) {
    branch1_snp_log.close();
    cerr << "Done reading branch 1 SNP log" << endl;
    
+   //Check if the entry in the indelmap exists for firstScaffold, if not, add (0,0) to it:
+   if (indelmap.count(firstScaffold) == 0) {
+      indelmap[firstScaffold].push_back(make_pair(0, 0));
+   }
+   
    //Now iterate over branch 2 log, adjusting new position back to old position using indel map, 
    //then comparing to branch 1 log to look for overlapping changes that need to be transitively reduced:
    cerr << "Reading branch 2 SNP log " << branch2snplog_path << endl;
@@ -248,6 +254,10 @@ int main(int argc, char **argv) {
       vector<string> line_vector;
       line_vector = splitString(b2line, '\t');
       if (line_vector[0] != firstScaffold) {
+         //Ensure the scaffold exists in the indelmap:
+         if (indelmap.count(line_vector[0]) == 0) {
+            indelmap[line_vector[0]].push_back(make_pair(0, 0));
+         }
          indelmap_iterator = indelmap[line_vector[0]].begin();
          left_iterator = indelmap[line_vector[0]].begin();
          b1log_iterator = branch1_log[line_vector[0]].begin();
