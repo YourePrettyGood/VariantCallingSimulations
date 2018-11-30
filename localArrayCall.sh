@@ -43,12 +43,27 @@ while read -r -a metadatafields
       fi
       CALLER="${metadatafields[2]}"
       SPECIAL="${metadatafields[3]}"
+      if [[ "${JOBTYPE}" == "STATS" ]]; then
+         FORMATSTR="${metadatafields[@]:4}"
+      fi
    fi
    (( WHICHSAMPLE++ ))
 done < $METADATA
 if [[ -z "$PREFIX" ]]; then
    echo "Unable to find sample $TASK_ID in metadata file. Skipping."
    exit 4
+fi
+
+if [[ "${JOBTYPE}" == "STATS" && -z "${FORMATSTR}" ]]; then
+   if [[ "${CALLER}" == "HC" ]]; then
+      FORMATSTR='-F CHROM -F POS -F BaseQRankSum -F ClippingRankSum -F DP -F FS -F MQ -F MQRankSum -F QD -F ReadPosRankSum -F SOR -GF DP -GF GQ -GF RGQ -GF SB'
+   elif [[ "${CALLER}" == "MPILEUP" ]]; then
+      FORMATSTR='%CHROM\t%POS\t%QUAL\t%INFO/DP\t%INFO/RPB\t%INFO/MQB\t%INFO/BQB\t%INFO/MQSB\t%INFO/SGB\t%INFO/MQ0F\t%GQ\t%INFO/HOB\t%INFO/MQ\t%INFO/DP4\n'
+   else
+      echo "Unable to identify caller ${CALLER}"
+      exit 8
+   fi
+   echo "Empty format string provided, using default: ${FORMATSTR}"
 fi
 
 SCRIPTDIR=`dirname $0`
@@ -60,6 +75,9 @@ if [[ $JOBTYPE =~ "CLASSIFY" ]]; then
    else
       CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${CALLABLEBED} ${CALLER} ${SPECIAL}"
    fi
+elif [[ $JOBTYPE =~ "STATS" ]]; then
+   #Params: PREFIX REF CALLER SPECIAL FORMATSTR
+   CMD="${SCRIPTDIR}/extractStats.sh ${PREFIX} ${REF} ${CALLER} ${SPECIAL} ${FORMATSTR}"
 else
    echo "Unintelligible job type $JOBTYPE"
    exit 3
