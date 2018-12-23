@@ -3,16 +3,18 @@ PREFIX="$1"
 #PREFIX: Prefix used for all intermediate and output files in the pipeline
 REF="$2"
 #REF: Path to the FASTA used as a reference for mapping
-CALLER="$3"
+CALLABLEBED="$3"
+#CALLABLEBED: BED of callable sites, or "all" to indicate all sites in genome
+CALLER="$4"
 #CALLER: Variant Caller used
-SPECIAL="$4"
+SPECIAL="$5"
 #SPECIAL: Special options indicating input files to use, e.g. no_markdup, no_IR
-FORMATSTR="${@:5}"
+FORMATSTR="${@:6}"
 #FORMATSTR: String to use for extracting statistics with
 # GATK VariantsToTable or BCFtools query
-#If SPECIAL is empty, bash won't parse it as $4, instead FORMATSTR will be $4
+#If SPECIAL is empty, bash won't parse it as $5, instead FORMATSTR will be $5 and on
 if [[ -z "$FORMATSTR" ]]; then
-   FORMATSTR="${@:4}"
+   FORMATSTR="${@:5}"
 fi
 
 echo "Extracting stats for caller ${CALLER} based on format string ${FORMATSTR}"
@@ -85,7 +87,7 @@ for i in "ER" "FN" "FP" "TN" "TP";
    fi
 done
 
-LOGPREFIX="${OUTPUTDIR}logs/${OUTPREFIX}"
+LOGPREFIX="${OUTPUTDIR}logs/${PREFIX}"
 ALLSTATS="${OUTPREFIX}_allStats.tsv"
 
 #Extract the VCF stats:
@@ -115,12 +117,23 @@ fi
 echo "Subsetting VCF stats by site class for ${INPUTVCF}"
 for i in "ER" "FN" "FP" "TN" "TP";
    do
-   echo "${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b ${OUTPREFIX}_${i}s.bed 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv"
-   ${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b ${OUTPREFIX}_${i}s.bed 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv
-   SUBSETCODE=$?
-   if [[ $SUBSETCODE -ne 0 ]]; then
-      echo "subsetVCFstats.pl of ${i}s failed for sample ${PREFIX} with exit code ${SUBSETCODE}"
-      exit 15;
+   #Subset out only those ERs, FNs, FPs, TNs, and TPs in callable regions:
+   if [[ -e "${CALLABLEBED}" ]]; then
+      echo "${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b <(${BEDTOOLS} intersect -a ${CALLABLEBED} -b ${OUTPREFIX}_${i}s.bed) 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv"
+      ${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b <(${BEDTOOLS} intersect -a ${CALLABLEBED} -b ${OUTPREFIX}_${i}s.bed) 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv
+      SUBSETCODE=$?
+      if [[ $SUBSETCODE -ne 0 ]]; then
+         echo "subsetVCFstats.pl of ${i}s failed for sample ${PREFIX} with exit code ${SUBSETCODE}"
+         exit 15;
+      fi
+   else
+      echo "${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b ${OUTPREFIX}_${i}s.bed 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv"
+      ${SCRIPTDIR}/subsetVCFstats.pl -d -i ${ALLSTATS} -b ${OUTPREFIX}_${i}s.bed 2> ${LOGPREFIX}_subsetVCFstats_${i}s.stderr > ${OUTPREFIX}_${i}_stats.tsv
+      SUBSETCODE=$?
+      if [[ $SUBSETCODE -ne 0 ]]; then
+         echo "subsetVCFstats.pl of ${i}s failed for sample ${PREFIX} with exit code ${SUBSETCODE}"
+         exit 15;
+      fi
    fi
 done
 
