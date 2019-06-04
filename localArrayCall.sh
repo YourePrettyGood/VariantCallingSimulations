@@ -76,8 +76,11 @@ if [[ $JOBTYPE =~ "CLASSIFY" ]]; then
       CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${CALLABLEBED} ${CALLER} ${SPECIAL}"
    fi
 elif [[ $JOBTYPE =~ "STATS" ]]; then
-   #Params: PREFIX REF CALLABLEBEDCALLER SPECIAL FORMATSTR
+   #Params: PREFIX REF CALLABLEBED CALLER SPECIAL FORMATSTR
    CMD="${SCRIPTDIR}/extractStats.sh ${PREFIX} ${REF} ${CALLABLEBED} ${CALLER} ${SPECIAL} ${FORMATSTR}"
+elif [[ $JOBTYPE =~ "INDELDIST" ]]; then
+   #Params: PREFIX CALLER CALLABLEBED SPECIAL
+   CMD="${SCRIPTDIR}/indelDist.sh ${PREFIX} ${CALLER} ${CALLABLEBED} ${SPECIAL}"
 else
    echo "Unintelligible job type $JOBTYPE"
    exit 3

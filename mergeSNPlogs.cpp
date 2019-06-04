@@ -4,6 +4,7 @@
  * Version 1.0 written 2017/01/16                                                 *
  * Version 1.1 written 2018/09/07 Variety of bug fixes                            *
  * Version 1.2 written 2018/10/18 Empty indelmap for scaffold bug fix             *
+ * Version 1.3 written 2019/03/29 Double-output of transitive sites bug fix       *
  * Description:                                                                   *
  *                                                                                *
  * Syntax: mergeSNPlogs [branch 1 indel log] [branch 1 SNP log] [branch 2 SNP log]*
@@ -25,7 +26,7 @@
 #define optional_argument 2
 
 //Version:
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 //Usage/help:
 #define USAGE "mergeSNPlogs\nUsage:\n mergeSNPlogs -i [branch 1 indel log] -b [branch 1 SNP log] -c [branch 2 SNP log]\n"
@@ -323,6 +324,7 @@ int main(int argc, char **argv) {
                cerr << "Branch 2 says " << int2bases[oldallele] << "->" << int2bases[newallele] << endl;
             }
             cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[(*b1log_iterator)[1]] << '\t' << int2bases[newallele] << endl;
+            ++b1log_iterator;
          } else { //Only branch 2 record at this position, so output it
             cout << line_vector[0] << '\t' << adjusted_position << '\t' << int2bases[oldallele] << '\t' << int2bases[newallele] << endl;
          }
