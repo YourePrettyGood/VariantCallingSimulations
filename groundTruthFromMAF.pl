@@ -12,9 +12,12 @@ Getopt::Long::Configure qw(gnu_getopt);
 
 #First pass script to extract ground truth INSNP from pairwise MAF
 # of 1:1 alignments produced by LAST
+#2023/05/31: Adjusted to output each a block at the first p line
+#            instead of the last p line to handle newer MAFs from
+#            LAST -- Thanks to Clair Han for catching this
 
 my $SCRIPTNAME = "groundTruthFromMAF.pl";
-my $VERSION = "1.0";
+my $VERSION = "1.1";
 
 =pod
 
@@ -200,7 +203,7 @@ while (my $line = <$maf_fh>) {
    }
    if ($maf_elems[0] eq "p") { #Identify SNPs once we're in the Probability lines
       $num_p_lines++;
-      next unless $num_p_lines == scalar(@species_aligned); #Skip unless we're on the last p line
+      next unless $num_p_lines == 1; #Skip unless we're on the first p line
       #Make a hash of the aligned species so we can take set differences:
       my %aligned_spp = map {$_ => 1} @species_aligned;
 
