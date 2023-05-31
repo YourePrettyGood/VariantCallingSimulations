@@ -21,10 +21,23 @@ BEGIN{
    degen["T","G"]="K";
    degen["T","T"]="T";
 }
+/^#CHROM/{
+#Identify the column corresponding to the sample of interest:
+   gtcol=10;
+   if(length(prefix)>0) {
+      for (i=10; i<=NF; i++) {
+         if ($i == prefix) {
+            gtcol=i;
+         }
+      }
+   }
+}
 !/^#/{
 #For non-header lines of a GATK VCF
 #Check if any of the alternate alleles have length > 1 (implying an insertion)
    split($5, alts, ",");
+#Set the zeroth element to the ref allele for easy degeneration
+   alts[0]=$4;
    hasIns=0;
    for (elem in alts) {
       if (alts[elem] != "<NON_REF>" && alts[elem] != "." && length(alts[elem]) > 1) {
@@ -41,17 +54,15 @@ BEGIN{
          }
       }
 #Extract the genotype, and degenerate the genotype into a IUPAC base
-      split($10, gt, ":");
-#Only output variants      
-      if (gt[gtelem] == "./." || gt[gtelem] == "0/0") {
-         next;
-      }
-      split(gt[gtelem], alleles, "/");
-#Add ref allele to the array of alleles:
-      alts[0] = $4;
+      split($gtcol, gt, ":");
+      split(gt[gtelem], alleles, "[/|]");
+#      print $1, $2, $4, alts[alleles[1]], alts[alleles[2]], alleles[1], alleles[2]; #Debug
 #Degenerate the genotype:
       alt=degen[alts[alleles[1]],alts[alleles[2]]];
+#Only output variants:
+      if (alt != $4) {
 #Print INSNP format: scaffold, position, from, to (from=ref, to=het or hom alt)
-      print $1, $2, $4, alt;
+         print $1, $2, $4, alt;
+      }
    }
 }

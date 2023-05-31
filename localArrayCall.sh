@@ -28,9 +28,14 @@ if [[ ! -z "$5" ]]; then
 fi
 
 WHICHSAMPLE=1
-while read -r -a metadatafields
+while IFS=$'\a' read -r -a metadatafields
    do
    if [[ $WHICHSAMPLE -eq $TASK_ID ]]; then
+      if [[ ${#metadatafields[@]} -lt "4" ]]; then
+         echo "Too few arguments supplied (${#metadatafields[@]})! Is your metadata file actually tab-separated (not space-separated)?"
+         echo "Line said: ${metadatafields[@]}"
+         exit 9;
+      fi
       PREFIX="${metadatafields[0]}"
       REF="${metadatafields[1]}"
       if [[ ! -e "${REF}" ]]; then
@@ -44,11 +49,15 @@ while read -r -a metadatafields
       CALLER="${metadatafields[2]}"
       SPECIAL="${metadatafields[3]}"
       if [[ "${JOBTYPE}" == "STATS" ]]; then
-         FORMATSTR="${metadatafields[@]:4}"
+#         FORMATSTR="${metadatafields[@]:4}"
+         FORMATSTR="${metadatafields[4]}"
+         JOINTPREFIX="${metadatafields[5]}"
+      else
+         JOINTPREFIX="${metadatafields[4]}"
       fi
    fi
    (( WHICHSAMPLE++ ))
-done < $METADATA
+done < <(tr "\t" "\a" < $METADATA)
 if [[ -z "$PREFIX" ]]; then
    echo "Unable to find sample $TASK_ID in metadata file. Skipping."
    exit 4
@@ -58,7 +67,7 @@ if [[ "${JOBTYPE}" == "STATS" && -z "${FORMATSTR}" ]]; then
    if [[ "${CALLER}" == "HC" ]]; then
       FORMATSTR='-F CHROM -F POS -F BaseQRankSum -F ClippingRankSum -F DP -F FS -F MQ -F MQRankSum -F QD -F ReadPosRankSum -F SOR -GF DP -GF GQ -GF RGQ -GF SB'
    elif [[ "${CALLER}" == "MPILEUP" ]]; then
-      FORMATSTR='%CHROM\t%POS\t%QUAL\t%INFO/DP\t%INFO/RPB\t%INFO/MQB\t%INFO/BQB\t%INFO/MQSB\t%INFO/SGB\t%INFO/MQ0F\t%GQ\t%INFO/HOB\t%INFO/MQ\t%INFO/DP4\n'
+      FORMATSTR='%CHROM\t%POS\t%QUAL\t%INFO/DP\t%INFO/RPB\t%INFO/MQB\t%INFO/BQB\t%INFO/MQSB\t%INFO/SGB\t%INFO/MQ0F\t%INFO/HOB\t%INFO/MQ[\t%DP\t%SP]\n'
    else
       echo "Unable to identify caller ${CALLER}"
       exit 8
@@ -69,21 +78,26 @@ fi
 SCRIPTDIR=`dirname $0`
 
 if [[ $JOBTYPE =~ "CLASSIFY" ]]; then
-   #Params: PREFIX REF GROUNDTRUTH CALLABLEBED CALLER SPECIAL
+   #Params: PREFIX REF GROUNDTRUTH CALLABLEBED CALLER SPECIAL JOINTPREFIX
    if [[ "${CALLABLEBED}" == "all" ]]; then
-      CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${REF}.fai ${CALLER} ${SPECIAL}"
+      CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${REF}.fai ${CALLER} ${SPECIAL} ${JOINTPREFIX}"
    else
-      CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${CALLABLEBED} ${CALLER} ${SPECIAL}"
+      CMD="${SCRIPTDIR}/classifySites.sh ${PREFIX} ${REF} ${GROUNDTRUTH} ${CALLABLEBED} ${CALLER} ${SPECIAL} ${JOINTPREFIX}"
    fi
 elif [[ $JOBTYPE =~ "STATS" ]]; then
-   #Params: PREFIX REF CALLABLEBED CALLER SPECIAL FORMATSTR
-   CMD="${SCRIPTDIR}/extractStats.sh ${PREFIX} ${REF} ${CALLABLEBED} ${CALLER} ${SPECIAL} ${FORMATSTR}"
+   #Params: PREFIX REF CALLABLEBED CALLER SPECIAL JOINTPREFIX FORMATSTR
+   CMD="${SCRIPTDIR}/extractStats.sh ${PREFIX} ${REF} ${CALLABLEBED} ${CALLER} ${SPECIAL} ${JOINTPREFIX} ${FORMATSTR}"
 elif [[ $JOBTYPE =~ "INDELDIST" ]]; then
-   #Params: PREFIX CALLER CALLABLEBED SPECIAL
-   CMD="${SCRIPTDIR}/indelDist.sh ${PREFIX} ${CALLER} ${CALLABLEBED} ${SPECIAL}"
+   #Params: PREFIX CALLER CALLABLEBED SPECIAL JOINTPREFIX
+   if [[ "${CALLABLEBED}" == "all" ]]; then
+      CMD="${SCRIPTDIR}/indelDist.sh ${PREFIX} ${CALLER} ${REF}.fai ${SPECIAL} ${JOINTPREFIX}"
+   else
+      CMD="${SCRIPTDIR}/indelDist.sh ${PREFIX} ${CALLER} ${CALLABLEBED} ${SPECIAL} ${JOINTPREFIX}"
+   fi
 else
    echo "Unintelligible job type $JOBTYPE"
    exit 3
 fi
 
+echo "${CMD}"
 $CMD

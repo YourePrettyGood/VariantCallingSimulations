@@ -10,6 +10,9 @@ CALLABLEBED="$3"
 # are considered callable.
 SPECIAL="$4"
 #SPECIAL: Special options indicating input files to use, e.g. no_markdup, no_IR
+JOINTPREFIX="$5"
+#JOINTPREFIX: Prefix for joint genotyping VCF, only passed in if SPECIAL
+# contains 'jointgeno'
 
 #Check that CALLABLEBED is either a BED or an FAI:
 CALLABLEEXT=${CALLABLEBED##*.}
@@ -26,6 +29,12 @@ if [[ ${PREFIX} =~ \/ ]]; then #If the prefix has a path
    PREFIX=`basename ${PREFIX}`
 fi
 
+JOINTOUTPUTDIR=""
+if [[ ${JOINTPREFIX} =~ \/ ]]; then #If the joint VCF prefix has a path
+   JOINTOUTPUTDIR="`dirname ${JOINTPREFIX}`/"
+   JOINTPREFIX=`basename ${JOINTPREFIX}`
+fi
+
 NOMARKDUP=""
 REALIGNED=""
 #Check that the input VCF file is there:
@@ -37,27 +46,65 @@ if [[ ! $SPECIAL =~ "no_IR" ]]; then
 fi
 
 READER="cat"
-CALLEREXT=""
+INSNPEXT=""
 if [[ $CALLER =~ "HC" ]]; then
    VCFSUFFIX="_HC_GGVCFs.vcf"
-   CALLEREXT="HC_GGVCFs" #Account for my stupidity in naming the INSNP in classifySites.sh
+   INSNPEXT="_GGVCFs_unfiltered_INSNP.tsv"
 elif [[ $CALLER =~ "MPILEUP" ]]; then
    VCFSUFFIX="_mpileupcall.vcf.gz"
-   READER="zcat"
-   CALLEREXT="MPILEUP"
+   READER="gzip -dc"
+   INSNPEXT="_MPILEUP_unfiltered_INSNP.tsv"
 else
    echo "Unable to determine VCF suffix for variant caller ${CALLER}"
    exit 2
 fi
-INPUTVCF="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}${VCFSUFFIX}"
+
+if [[ -z "${JOINTPREFIX}" ]]; then
+   if [[ ${SPECIAL} =~ 'jointgeno' ]]; then
+      echo "Please specify a prefix for the jointly-genotyped VCF when using the
+ jointgeno option"
+      exit 3
+   fi
+   INPUTVCF="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}${VCFSUFFIX}${GZIPPED}
+"
+   OUTPREFIX="${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}"
+   echo "Using single-sample VCF ${INPUTVCF}"
+else
+   if [[ ${SPECIAL} =~ 'jointgeno' ]]; then
+      VCFSUFFIX=${VCFSUFFIX##*.}
+      VCFSUFFIX=".${VCFSUFFIX}"
+      INPUTVCF="${JOINTOUTPUTDIR}${JOINTPREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}_joint${VCFSUFFIX}${GZIPPED}"
+      OUTPREFIX="${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}_joint"
+      echo "Using jointly-genotyped VCF ${INPUTVCF}"
+   else
+      INPUTVCF="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}${VCFSUFFIX}${GZIPPED}"
+      OUTPREFIX="${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}"
+      echo "Prefix for jointly-genotyped VCF provided, but not used."
+      echo "Using single-sample VCF ${INPUTVCF}"
+   fi
+fi
+
 if [[ ! -e "${INPUTVCF}" ]]; then
    if [[ $CALLER =~ "HC" && -e "${INPUTVCF}.gz" ]]; then
       INPUTVCF="${INPUTVCF}.gz"
-      READER="zcat"
+      READER="gzip -dc"
    else
       echo "Unable to find input VCF ${INPUTVCF} for variant caller ${CALLER}"
       exit 3
    fi
+fi
+
+LOGPREFIX="${OUTPUTDIR}logs/${PREFIX}"
+INTPREFIX="${OUTPUTDIR}${OUTPREFIX}"
+INSNP="${INTPREFIX}${INSNPEXT}"
+INDELDISTPREFIX="${INTPREFIX}_indel_dists"
+
+#SPECIAL options may indicate cleanup of intermediate files,
+# but not log files:
+if [[ $SPECIAL =~ "cleanup" ]]; then
+   rm -f ${INDELDISTPREFIX}_all.tsv ${INDELDISTPREFIX}_{ER,FN,FP,TN,TP}s.tsv ${INDELDISTPREFIX}_{ER,FN,FP,TN,TP}s_masked.tsv
+   echo "Cleanup complete for sample ${PREFIX}"
+   exit 0
 fi
 
 #Load the appropriate path variables for the filtering and masking tools:
@@ -78,14 +125,10 @@ if [[ ! -x "$(command -v ${SCRIPTDIR}/subsetVCFstats.pl)" ]]; then
    exit 6
 fi
 
-
-OUTPREFIX="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLER}"
-INSNP="${OUTPUTDIR}${PREFIX}${NOMARKDUP}${REALIGNED}_${CALLEREXT}_unfiltered_INSNP.tsv"
-
 #Check that the files of interest exist:
 #Unfiltered INSNP (for unmasked set):
 if [[ ! -e "${INSNP}" ]]; then
-   echo "Unable to find ${INSNP}, please run PSEUDOFASTA."
+   echo "Unable to find ${INSNP}, please run CLASSIFY."
    exit 7;
 fi
 #${OUTPREFIX}_[EFT][NPR]s.bed
@@ -96,9 +139,6 @@ for i in "ER" "FN" "FP" "TN" "TP";
       exit 8
    fi
 done
-
-LOGPREFIX="${OUTPUTDIR}logs/${PREFIX}"
-INDELDISTPREFIX="${OUTPREFIX}_indel_dists"
 
 #Compute distances to closest indel for all SNPs:
 echo "Computing distance to closest indel for SNPs in ${INPUTVCF}"
